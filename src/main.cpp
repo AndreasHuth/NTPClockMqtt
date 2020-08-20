@@ -38,14 +38,14 @@ const char* mqtt_server = "192.168.0.192";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-const char* sub_action       = "/hhome/node16/action";
-const char* sub_display_clear = "/hhome/node16/displayOff";
-const char* sub_display_Brightness = "/hhome/node16/displayBrightness";
-const char* sub_display_control = "/hhome/node16/displayControl";
-const char* sub_alarm_minute = "/hhome/node16/alarmminute";
-const char* sub_alarm_hour = "/hhome/node16/alarmhour";
-const char* sub_alarm_on = "/hhome/node16/alarmOn";
-const char* sub_alarm_set = "/hhome/node16/SetAlarm";
+const char* sub_action       = "/hhome/DG/action";
+const char* sub_display_clear = "/hhome/DG/displayOff";
+const char* sub_display_Brightness = "/hhome/DG/displayBrightness";
+const char* sub_display_control = "/hhome/DG/displayControl";
+const char* sub_alarm_minute = "/hhome/DG/alarmminute";
+const char* sub_alarm_hour = "/hhome/DG/alarmhour";
+const char* sub_alarm_on = "/hhome/DG/alarmOn";
+const char* sub_alarm_set = "/hhome/DG/SetAlarm";
 
 // buttons
 #define BUTTON_PIN_0 D4
@@ -341,13 +341,13 @@ boolean loop_pir(void) {
       pirEvent = true;
       Serial.println("pir1");
       MQTTsleepMode = false;
-      client.publish("/hhome/node16/pirevent", String("1").c_str());
+      client.publish("/hhome/DG/pirevent", String("1").c_str());
     }
   }
   else if ((newState == LOW) && (oldState == HIGH)) {
       pirEvent = false;
         Serial.println("pir0");
-      client.publish("/hhome/node16/pirevent", String("0").c_str());
+      client.publish("/hhome/DG/pirevent", String("0").c_str());
   }
   oldState = newState;
   return pirEvent;
@@ -857,7 +857,7 @@ void loop()
            strcat(helper, helper2);
         }
  
-        client.publish("/hhome/node16/alarmtime", String(helper).c_str());
+        client.publish("/hhome/DG/alarmtime", String(helper).c_str());
     }
     lastsetAlarm = setAlarm;
 
@@ -914,7 +914,7 @@ void loop()
            strcat(helper, helper2);
         }
 
-        client.publish("/hhome/node16/alarmtime", String(helper).c_str());
+        client.publish("/hhome/DG/alarmtime", String(helper).c_str());
         //Serial.print (" MQTTclockAlarmOn:  "); Serial.println(MQTTclockAlarmOn);
 
         MQTTclockAlarmOn = false;
@@ -1020,14 +1020,14 @@ void loop()
 
     if (abs(sensorValueLDRmean-sensorValueLDRmean_old) > 50)
         {
-          client.publish("/hhome/node16/ldr", String(sensorValueLDRmean).c_str());
+          client.publish("/hhome/DG/ldr", String(sensorValueLDRmean).c_str());
           sensorValueLDRmean_old = sensorValueLDRmean;
         }
 
     if ((last_transmit == 0) || (abs(now - last_transmit) > INTERVAL1))
     {
       sensorValueLDRmean_old = sensorValueLDRmean;
-       client.publish("/hhome/node16/ldr", String(sensorValueLDRmean).c_str());
+       client.publish("/hhome/DG/ldr", String(sensorValueLDRmean).c_str());
 
        itoa(alarmHour, helper1, 10);
        itoa(alarmMinute, helper2, 10);
@@ -1054,7 +1054,7 @@ void loop()
           strcat(helper, helper2);
        }
 
-       client.publish("/hhome/node16/alarmtime", String(helper).c_str());
+       client.publish("/hhome/DG/alarmtime", String(helper).c_str());
        last_transmit = now;
     }
 
