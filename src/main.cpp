@@ -1,27 +1,13 @@
-// Module connection pins (Digital Pins)
-
-//
-//   NTP-Based Clock - https://steve.fi/Hardware/
-//
-//   This is a simple program which uses WiFi & an 4x7-segment display
-//   to show the current time, complete with blinking ":".
-//
-//   Steve
-//   --
-//
-
-//
 // WiFi & over the air updates
-//
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 
-//
 // eeprom
-//
-
 #include <EEPROM.h>
 #include "myTypes.h"
+
+// defines:
+#include "defines.h"
 
 int cfgStart = 0;
 configData_t cfg;
@@ -29,7 +15,6 @@ configData_t cfg;
 // Neopixel lib
 #include <Adafruit_NeoPixel.h>
 #include <neopixel_fun.h>
-
 
 #include <PubSubClient.h>
 // Update these with values suitable for your network.
@@ -47,40 +32,24 @@ const char* sub_alarm_hour = "/hhome/DG/alarmhour";
 const char* sub_alarm_on = "/hhome/DG/alarmOn";
 const char* sub_alarm_set = "/hhome/DG/SetAlarm";
 
-// buttons
-#define BUTTON_PIN_0 D4
-#define BUTTON_PIN_1 D5
-#define BUTTON_PIN_2 D6
-
-// timing
-#define INTERVAL1  60000 // 60 sec = 1Min
-#define INTERVAL2  500
-#define INTERVAL3  600000 // 600 sec  = 10min
-
-// ADC-Filter
-#define RATIO 0.90
-
 // For dealing with NTP & the clock.
 //
-#include <NTPClient.h>
+#include "ntp.h"
 
 //
 // The display-interface
 //
 #include "TM1637.h"
-
+TM1637 tm1637(DIO, CLK);
 
 //
 // WiFi setup.
 //
 #include "WiFiManager.h"
 
-
 //
 // Debug messages over the serial console.
 //
-
-
 #define DEBUG 1
 
 //
@@ -116,58 +85,10 @@ void DEBUG_LOG(const char *format, ...)
 }
 
 //
-// The name of this project.
-//
-// Used for:
-//   Access-Point name, in config-mode
-//   OTA name.
-//
-#define PROJECT_NAME "NTP-CLOCK"
-
-
-//
-// The timezone - comment out to stay at GMT.
-//
-#define TIME_ZONE 2  // Winter 1, Sommer 2
-
-//
-// NTP client, and UDP socket it uses.
-//
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
-
-
-//
-// Pin definitions for TM1637 and can be changed to other ports
-//
-#define CLK D1
-#define DIO D2
-//#define BUILTIN_LED D4
-TM1637 tm1637(DIO, CLK);
-
-//
 // Pin definitions for buzzer
 //
-int buzzer=D3; //Buzzer control port
-
+int buzzer = BUZZER_PIN; //Buzzer control port
 int freq=2000;
-
-
-//
-// Called just before the date/time is updated via NTP
-//
-void on_before_ntp()
-{
-    DEBUG_LOG("Updating date & time");
-}
-
-//
-// Called just after the date/time is updated via NTP
-//
-void on_after_ntp()
-{
-    DEBUG_LOG("Updated NTP client\n");
-}
 
 //
 // MQTT reconnect
@@ -208,10 +129,6 @@ void reconnect() {
 
 // PIR functions ...
 boolean oldState = HIGH;
-//int counter =0;
-
-#define PIR_PIN D7
-
 void setup_pir(void) {
     pinMode(PIR_PIN, INPUT);
 }
@@ -226,7 +143,6 @@ boolean AlarmOn = false;
 //
 // MQTT callback
 //
-
 boolean MQTTEvent = false;
 int MQTTEventValue = 0;
 boolean MQTTsleepMode = false;
@@ -237,7 +153,6 @@ int MQTTclockAlarmHours = 0;
 int MQTTclockAlarmMinutes = 0;
 
 int MQTTclockAlarmOn = false;
-
 
 void callback(char* topic, byte* payload, unsigned int length) {
   String messageTemp;
@@ -354,7 +269,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-
 //
 // PIR LOOP
 //
@@ -457,12 +371,10 @@ void setup()
     delay(200);
     analogWrite(buzzer, 0);
 
-
     // Buttons
     pinMode(BUTTON_PIN_0, INPUT_PULLUP);
     pinMode(BUTTON_PIN_1, INPUT_PULLUP);
     pinMode(BUTTON_PIN_2, INPUT_PULLUP);
-
 
     // Neopixel-Ring
     setup_neopixel();
@@ -490,36 +402,9 @@ void setup()
       delay(5000);
     }
 
-
     Serial.println("WIFI ready");
-    //
-    // Ensure our NTP-client is ready.
-    //
-    timeClient.begin();
-
-    //
-    // Configure the callbacks.
-    //
-    timeClient.on_before_update(on_before_ntp);
-    timeClient.on_after_update(on_after_ntp);
-
-    //
-    // Setup the timezone & update-interval.
-    //
-    timeClient.setTimeOffset(TIME_ZONE * (60 * 60));
-    timeClient.setUpdateInterval(300 * 1000);
-
-    Serial.println("NTP ready");
-    //
-    // The final step is to allow over the air updates
-    //
-    // This is documented here:
-    //     https://randomnerdtutorials.com/esp8266-ota-updates-with-arduino-ide-over-the-air/
-    //
-    // Hostname defaults to esp8266-[ChipID]
-    //
+    setuptime();
     ArduinoOTA.setHostname(PROJECT_NAME);
-
     ArduinoOTA.onStart([]()
     {
         DEBUG_LOG("OTA Start\n");
@@ -553,11 +438,9 @@ void setup()
 
     //
     // Ensure the OTA process is running & listening.
-    //
     ArduinoOTA.begin();
     //digitalWrite(BUILTIN_LED, HIGH);  // turn on LED with voltage HIGH
     ClearLed (4);
-
     //
     // Connect MQTT server
     //
@@ -567,12 +450,7 @@ void setup()
     Serial.println("Start MAIN...");
 }
 
-int button0Ivent = 0;
-int button1Ivent = 0;
-int button2Ivent = 0;
 
-float sensorValueLDRmean = 0.0;
-float sensorValueLDRmean_old = 0.0;
 
 //
 // This function is called continously, and is responsible
@@ -581,273 +459,266 @@ float sensorValueLDRmean_old = 0.0;
 // We rely on the background NTP-updates to actually make sure
 // that that works.
 //
-void loop()
-{
-    if (!client.connected()) {
-        reconnect();
+void loop() {
+  int button0Ivent = 0;
+  int button1Ivent = 0;
+  int button2Ivent = 0;
+
+  float sensorValueLDRmean = 0.0;
+  static float sensorValueLDRmean_old = 0.0;
+
+  if (!client.connected()) {
+      reconnect();
+  }
+  client.loop();
+
+  static char buf[10] = { '\0' };
+  static char prev[10] = { '\0' };
+
+  static long last_read = 0;
+  static long last_Change = 0;
+  static long last_counter = 0;
+  static long last_transmit = 0;
+  static long lastWakeup = 0;
+
+  static bool flash = true;
+  static boolean setAlarm = false;
+  static boolean lastsetAlarm = false;
+  static boolean oldButtonState0 = true;
+  static boolean oldButtonState1 = true;
+  static boolean oldButtonState2 = true;
+  static int button0Counter  = 0;
+  static int button1Counter  = 0;
+  static int button2Counter  = 0;
+  static boolean toggle = false;
+
+  // static int newButtonState = 0;
+
+  long counter = millis();
+  int cur_hour = 0;
+  int cur_min  = 0;
+
+  int cur_hour_value = 0;
+  int cur_min_value  = 0;
+  boolean alarmMinuteSpeed = false;
+  boolean alarmHourSpeed = false;
+  static boolean AlarmActive = false;
+
+  char helper[5] = "";
+  char helper1[5];
+  char helper2[5];
+
+  long now = millis();
+
+  //
+  // Handle any pending over the air updates.
+  ArduinoOTA.handle();
+
+  // PIR func
+  loop_pir();
+
+  if (MQTTEvent)
+  {
+    if (MQTTEventValue==3)
+      colorWipe(strip.Color(255,   0,   0), 1);
+    else if (MQTTEventValue==2)
+      colorWipe(strip.Color(0,   0,   255), 1);
+    else if (MQTTEventValue==1)
+      colorWipe(strip.Color(0,   255,   0), 1);
+  }
+  else if (MQTTsleepMode)
+  {
+    colorWipe(strip.Color(0,   0,   0), 1);
+  }
+  else if(AlarmActive && toggle)
+  {
+    ClearLed(1);
+    SetLedAlarmActive(2);
+    SetLedAlarmActive(3);
+    SetLedAlarmActive(4);
+    SetLedAlarmActive(5);
+    SetLedAlarmActive(6);
+    ClearLed(7);
+  }
+  else if(setAlarm)
+  {
+    SetLedSetAlarm(1);
+    ClearLed(2);
+    ClearLed(3);
+    ClearLed(4);
+    ClearLed(5);
+    ClearLed(6);
+    SetLedSetAlarm(7);
+  }
+  else if (AlarmOn)
+  {
+    SetLedAlarmOn(0);
+    ClearLed(1);
+    ClearLed(2);
+    ClearLed(3);
+    ClearLed(4);
+    ClearLed(5);
+    ClearLed(6);
+    ClearLed(7);
+  }
+  else
+  {
+    colorWipe(strip.Color(0,   0,   0), 1);
+  }
+
+
+  if ((last_counter == 0) || (abs(counter - last_counter) > 50))  {
+
+    boolean newButtonState0 = digitalRead(BUTTON_PIN_0);
+    // Check if state changed from high to low (button press).
+    if      ((newButtonState0 == HIGH) && (oldButtonState0 == HIGH)) {
+        button0Counter = 0;
+      }
+    else if ((newButtonState0 == LOW) && (oldButtonState0 == HIGH)) {
+        button0Ivent = 1;
+        button0Counter = 0;
+      }
+    else if ((newButtonState0 == LOW) && (oldButtonState0 == LOW)) {
+          button0Counter ++;
+        }
+    else if ((newButtonState0 == HIGH) && (oldButtonState0 == LOW)) {
+        button0Counter = 0;
     }
-    client.loop();
 
-    static char buf[10] = { '\0' };
-    static char prev[10] = { '\0' };
 
-    static long last_read = 0;
-    static long last_Change = 0;
-    static long last_counter = 0;
-    static long last_transmit = 0;
-    static long lastWakeup = 0;
-
-    static bool flash = true;
-    static boolean setAlarm = false;
-    static boolean lastsetAlarm = false;
-    static boolean oldButtonState0 = true;
-    static boolean oldButtonState1 = true;
-    static boolean oldButtonState2 = true;
-    static int button0Counter  = 0;
-    static int button1Counter  = 0;
-    static int button2Counter  = 0;
-    static boolean toggle = false;
-
-    // static int newButtonState = 0;
-
-    long counter = millis();
-    int cur_hour = 0;
-    int cur_min  = 0;
-
-    int cur_hour_value = 0;
-    int cur_min_value  = 0;
-    boolean alarmMinuteSpeed = false;
-    boolean alarmHourSpeed = false;
-    static boolean AlarmActive = false;
-
-    char helper[5] = "";
-    char helper1[5];
-    char helper2[5];
-
-    long now = millis();
-
-    //
-    // Resync the clock?
-    //
-    timeClient.update();
-
-    //
-    // Handle any pending over the air updates.
-    //
-    ArduinoOTA.handle();
-
-    // PIR func
-    loop_pir();
-
-      if (MQTTEvent)
-      {
-        if (MQTTEventValue==3)
-          colorWipe(strip.Color(255,   0,   0), 1);
-        else if (MQTTEventValue==2)
-          colorWipe(strip.Color(0,   0,   255), 1);
-        else if (MQTTEventValue==1)
-          colorWipe(strip.Color(0,   255,   0), 1);
+    boolean newButtonState1 = digitalRead(BUTTON_PIN_1);
+    // Check if state changed from high to low (button press).
+    if      ((newButtonState1 == HIGH) && (oldButtonState1 == HIGH)) {
+        button1Counter = 0;
       }
-      else if (MQTTsleepMode)
-      {
-        colorWipe(strip.Color(0,   0,   0), 1);
+    else if ((newButtonState1 == LOW) && (oldButtonState1 == HIGH)) {
+        button1Ivent = 1;
+        button1Counter = 0;
       }
-      else if(AlarmActive && toggle)
-      {
-        ClearLed(1);
-        SetLedAlarmActive(2);
-        SetLedAlarmActive(3);
-        SetLedAlarmActive(4);
-        SetLedAlarmActive(5);
-        SetLedAlarmActive(6);
-        ClearLed(7);
-      }
-      else if(setAlarm)
-      {
-        SetLedSetAlarm(1);
-        ClearLed(2);
-        ClearLed(3);
-        ClearLed(4);
-        ClearLed(5);
-        ClearLed(6);
-        SetLedSetAlarm(7);
-      }
-      else if (AlarmOn)
-      {
-        SetLedAlarmOn(0);
-        ClearLed(1);
-        ClearLed(2);
-        ClearLed(3);
-        ClearLed(4);
-        ClearLed(5);
-        ClearLed(6);
-        ClearLed(7);
-      }
-      else
-      {
-        colorWipe(strip.Color(0,   0,   0), 1);
-      }
-
-
-    if ((last_counter == 0) || (abs(counter - last_counter) > 50))  {
-
-      boolean newButtonState0 = digitalRead(BUTTON_PIN_0);
-      // Check if state changed from high to low (button press).
-      if      ((newButtonState0 == HIGH) && (oldButtonState0 == HIGH)) {
-          button0Counter = 0;
+    else if ((newButtonState1 == LOW) && (oldButtonState1 == LOW)) {
+          button1Counter ++;
+          if (button1Counter >= 10)   button1Counter = 10;
         }
-      else if ((newButtonState0 == LOW) && (oldButtonState0 == HIGH)) {
-          button0Ivent = 1;
-          button0Counter = 0;
-        }
-      else if ((newButtonState0 == LOW) && (oldButtonState0 == LOW)) {
-            button0Counter ++;
-          }
-      else if ((newButtonState0 == HIGH) && (oldButtonState0 == LOW)) {
-          button0Counter = 0;
+    else if ((newButtonState1 == HIGH) && (oldButtonState1 == LOW)) {
+        button1Counter = 0;
+        alarmMinuteSpeed = false;
+        alarmHourSpeed = false;
+    }
+
+
+    boolean newButtonState2 = digitalRead(BUTTON_PIN_2);
+    // Check if state changed from high to low (button press).
+    if      ((newButtonState2 == HIGH) && (oldButtonState2 == HIGH)) {
+        button2Counter = 0;
       }
-
-
-      boolean newButtonState1 = digitalRead(BUTTON_PIN_1);
-      // Check if state changed from high to low (button press).
-      if      ((newButtonState1 == HIGH) && (oldButtonState1 == HIGH)) {
-          button1Counter = 0;
-        }
-      else if ((newButtonState1 == LOW) && (oldButtonState1 == HIGH)) {
-          button1Ivent = 1;
-          button1Counter = 0;
-        }
-      else if ((newButtonState1 == LOW) && (oldButtonState1 == LOW)) {
-            button1Counter ++;
-            if (button1Counter >= 10)   button1Counter = 10;
-          }
-      else if ((newButtonState1 == HIGH) && (oldButtonState1 == LOW)) {
-          button1Counter = 0;
-          alarmMinuteSpeed = false;
-          alarmHourSpeed = false;
+    else if ((newButtonState2 == LOW) && (oldButtonState2 == HIGH)) {
+        button2Counter = 0;
+        button2Ivent = 1;
       }
-
-
-      boolean newButtonState2 = digitalRead(BUTTON_PIN_2);
-      // Check if state changed from high to low (button press).
-      if      ((newButtonState2 == HIGH) && (oldButtonState2 == HIGH)) {
-          button2Counter = 0;
+    else if ((newButtonState2 == LOW) && (oldButtonState2 == LOW)) {
+          button2Counter ++;
+          if (button2Counter >= 10)   button2Counter = 10;
         }
-      else if ((newButtonState2 == LOW) && (oldButtonState2 == HIGH)) {
-          button2Counter = 0;
-          button2Ivent = 1;
-        }
-      else if ((newButtonState2 == LOW) && (oldButtonState2 == LOW)) {
-            button2Counter ++;
-            if (button2Counter >= 10)   button2Counter = 10;
-          }
-      else if ((newButtonState2 == HIGH) && (oldButtonState2 == LOW)) {
-          button2Counter = 0;
-          alarmMinuteSpeed = false;
-          alarmHourSpeed = false;
+    else if ((newButtonState2 == HIGH) && (oldButtonState2 == LOW)) {
+        button2Counter = 0;
+        alarmMinuteSpeed = false;
+        alarmHourSpeed = false;
+    }
+
+    if (button0Counter >= 10) {
+      button0Counter = 10;
+      if (setAlarm){
+        setAlarm = false;
       }
+      else{
+        setAlarm = true;
+      }
+      button0Counter = 0;
+      button1Counter = 0;
+      button2Counter = 0;
+      button1Ivent = 0;
+      button2Ivent = 0;
 
-      if (button0Counter >= 10)
-        {
-          button0Counter = 10;
-          if (setAlarm){
-            setAlarm = false;
-          }
-          else{
-            setAlarm = true;
-          }
-          button0Counter = 0;
-          button1Counter = 0;
-          button2Counter = 0;
-          button1Ivent = 0;
-          button2Ivent = 0;
+      analogWrite(buzzer, 512); // 512
+      delay (100);
+      analogWrite(buzzer, 0);
+    }
 
-          analogWrite(buzzer, 512); // 512
-          delay (100);
-          analogWrite(buzzer, 0);
-        }
+    oldButtonState0 = newButtonState0;
+    oldButtonState1 = newButtonState1;
+    oldButtonState2 = newButtonState2;
 
-        oldButtonState0 = newButtonState0;
-        oldButtonState1 = newButtonState1;
-        oldButtonState2 = newButtonState2;
-
-      last_counter = counter;
+    last_counter = counter;
     }
 
     if (setAlarm)  {
-        //
-        // SET the alarm hour/min
-        //
-        if (button1Counter >= 10)
-            {alarmMinuteSpeed = true;}
-        else if  (button1Ivent)  {
-            alarmMinute  ++;
-            if (alarmMinute > 59)
-              alarmMinute = 0;
-            button1Ivent = 0;
-        }
+      // SET the alarm hour/min
+      if (button1Counter >= 10)
+          {alarmMinuteSpeed = true;}
+      else if  (button1Ivent)  {
+          alarmMinute  ++;
+          if (alarmMinute > 59)
+            alarmMinute = 0;
+          button1Ivent = 0;
+      }
 
-        if (button2Counter >= 10)
-            {alarmHourSpeed = true;}
-        if  (button2Ivent)  {
-            alarmHour ++;
-            if (alarmHour > 23)
-              alarmHour = 0;
-            button2Ivent = 0;
-        }
+      if (button2Counter >= 10)
+          {alarmHourSpeed = true;}
+      if  (button2Ivent)  {
+          alarmHour ++;
+          if (alarmHour > 23)
+            alarmHour = 0;
+          button2Ivent = 0;
+      }
 
-        if ((last_Change == 0) || (abs(now - last_Change) > 150))
-        {
-            if (alarmMinuteSpeed) alarmMinute++;
-            if (alarmMinute > 59)
-              alarmMinute = 0;
-            if (alarmHourSpeed) alarmHour++;
-            if (alarmHour > 23)
-              alarmHour = 0;
-            last_Change = now;
-        }
+      if ((last_Change == 0) || (abs(now - last_Change) > 150))
+      {
+          if (alarmMinuteSpeed) alarmMinute++;
+          if (alarmMinute > 59)
+            alarmMinute = 0;
+          if (alarmHourSpeed) alarmHour++;
+          if (alarmHour > 23)
+            alarmHour = 0;
+          last_Change = now;
+      }
 
-        cur_hour = alarmHour;
-        cur_min = alarmMinute;
-        //
-        // Format them in a useful way.
-        //
-        sprintf(buf, "%02d%02d", cur_hour, cur_min);
-
-
-    }
+      cur_hour = alarmHour;
+      cur_min = alarmMinute;
+      //
+      // Format them in a useful way.
+      //
+      sprintf(buf, "%02d%02d", cur_hour, cur_min);
+  }
     else
     {
-        //
-        // Get the current hour/min
-        //
-        cur_hour_value = timeClient.getHours();
-        cur_min_value  = timeClient.getMinutes();
+      //
+      // Get the current hour/min
+      String strTime = localTime(); 
+      cur_hour_value = tm.tm_hour;         // hours since midnight  0-23
+      cur_min_value = tm.tm_min;          // minutes after the hour  0-59
 
-        //
-        // Format them in a useful way.
-        //
-        sprintf(buf, "%02d%02d", cur_hour_value, cur_min_value);
+      // Format them in a useful way.
+      sprintf(buf, "%02d%02d", cur_hour_value, cur_min_value);
     }
 
 
     if (!MQTTsleepMode)
     {
-        //
-        // If the current "hourmin" is different to
-        // that we displayed last loop ..
-        //
-        if (strcmp(buf, prev) != 0)
-        {
-            // Update the display
-            tm1637.display(0, buf[0] - '0');
-            tm1637.display(1, buf[1] - '0');
-            tm1637.display(2, buf[2] - '0');
-            tm1637.display(3, buf[3] - '0');
+      //
+      // If the current "hourmin" is different to
+      // that we displayed last loop ..
+      //
+      if (strcmp(buf, prev) != 0)
+      {
+          // Update the display
+          tm1637.display(0, buf[0] - '0');
+          tm1637.display(1, buf[1] - '0');
+          tm1637.display(2, buf[2] - '0');
+          tm1637.display(3, buf[3] - '0');
 
-            // And cache it
-            strcpy(prev , buf);
-        }
+          // And cache it
+          strcpy(prev , buf);
+      }
     }
     else
     {
@@ -895,7 +766,6 @@ void loop()
 
     //
     // Alarm ein/ausschalten
-    //
     if ((button1Counter >= 10) && (button2Counter >= 10) && !setAlarm)
     {
       if (AlarmOn)
@@ -905,8 +775,6 @@ void loop()
       button1Counter = 0;
       button2Counter = 0;
     }
-
-
 
     if (MQTTclockAlarmOn)
     {
@@ -951,7 +819,6 @@ void loop()
 
         MQTTclockAlarmOn = false;
     }
-
 
     //
     // The preceeding piece of code would
@@ -1023,7 +890,6 @@ void loop()
         //
         // Alarm prüfen und Led blinken
         //
-
         if (AlarmOn)
         {
           if ((cur_hour_value == alarmHour) && (cur_min_value == alarmMinute))
@@ -1096,6 +962,4 @@ void loop()
         MQTTEvent = false;
         lastWakeup = now;
     }
-
-
 }
