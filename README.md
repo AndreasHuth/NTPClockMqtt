@@ -8,9 +8,10 @@ PlatformIO Extension is necessary.
 
 ## further informations
 The following libaries are used: 
- tzapu/WiFiManager @ ^0.16.0
- adafruit/Adafruit NeoPixel @ ^1.10.4
- knolleary/PubSubClient @ ^2.8
+
+- tzapu/WiFiManager @ ^0.16.0
+- adafruit/Adafruit NeoPixel @ ^1.10.4
+- knolleary/PubSubClient @ ^2.8
 
 
 ## Links
