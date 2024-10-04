@@ -1,9 +1,7 @@
-
-
-// buttons
-#define BUTTON_PIN_0 D4
-#define BUTTON_PIN_1 D5
-#define BUTTON_PIN_2 D6
+// MQTT Defines
+#define MQTT_SERVER         "192.168.0.192"
+#define MQTT_SERVER_TEST    "192.168.1.0"
+#define MQTT_PORT           "1883"
 
 // timing
 #define INTERVAL1  60000 // 60 sec = 1Min
@@ -25,12 +23,12 @@
 //
 // Pin definitions for TM1637 and can be changed to other ports
 //
-#define CLK D1
-#define DIO D2
+#define CLK          D1
+#define DIO          D2
 
-#define BUZZER_PIN D3
-
-
-#define PIR_PIN D7
-
-
+// Pin Definition 
+#define BUZZER_PIN   D3
+#define PIR_PIN      D7
+#define BUTTON_PIN_0 D4
+#define BUTTON_PIN_1 D5
+#define BUTTON_PIN_2 D6
